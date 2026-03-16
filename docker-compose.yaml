@@ -65,6 +65,7 @@ x-airflow-common: &airflow-common
     AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_USERS: "admin:admin"
     AIRFLOW__API__AUTH_BACKENDS: "airflow.api.auth.backend.basic_auth,airflow.api.auth.backend.session"
     AIRFLOW_CONN_CDS: "http://cds.cern.ch"
+    AIRFLOW_CONN_REPO_CDS: "https://repository.cern"
     AIRFLOW_CONN_SUPERSET: "postgresql://bi_local:bi_local@postgres_local:5432/bi_local"
     # yamllint disable rule:line-length
     # Use simple http server on scheduler for health checks
