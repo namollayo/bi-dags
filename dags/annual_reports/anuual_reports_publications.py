@@ -38,6 +38,21 @@ def annual_reports_publications_dag():
         publication_report_count, journals = get_publications_by_year(response.content)
         return {year: (publication_report_count, journals)}
 
+    @task(executor_config=kubernetes_executor_config)
+    def fetch_thesis_report_count(year, **kwargs):
+        http_hook = HttpHook(http_conn_id = "repo", method="GET")
+        response = http_hook.run_with_advanced_retry(
+            endpoint=f"api/communities/ad8d4abd-9809-4dc3-b4bf-dd403c9d6a8d/records?resource_type=publication%3A%3Apublication-dissertation&publication_date={year}",
+            _retry_args={
+                "stop": stop_after_attempt(3),
+                "retry": retry_if_exception_type(AirflowException),
+            }
+        )
+        data = response.json()
+        total_thesis = data.get('hits', {}).get('total', 0)
+        logger.info(f"CDS Repo: {year} - {total_thesis}")
+        return {year: total_thesis}
+
     @sqlalchemy_task(conn_id="superset")
     def process_results(results, session, **kwargs):
         for year, values in results.items():
@@ -95,13 +110,18 @@ def annual_reports_publications_dag():
         fetch_task = fetch_publication_report_count.override(
             task_id=f"fetch_report_{year}"
         )(year=year)
+        fetch_thesis = fetch_thesis_report_count.override(
+            task_id=f"fetch_thesis_{year}"
+        )(year=year)
         process_task = process_results.override(task_id=f"process_results_{year}")(
-            results=fetch_task
+            results=fetch_task,
+            thesis_results=fetch_thesis
         )
         if previous_task:
-            previous_task >> fetch_task
-        fetch_task >> process_task
+            previous_task >> [fetch_task, fetch_thesis]
+        [fetch_task, fetch_thesis] >> process_task
         previous_task = process_task
 
 
 annual_reports_publications = annual_reports_publications_dag()
+
